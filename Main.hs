@@ -59,34 +59,33 @@ dynCollatz tm n0 = do accum <- readTVarIO tm
 {-- main thread --}
 
 main :: IO ()
-main = do hSetBuffering stdout NoBuffering
+main = do hSetBuffering stdout NoBuffering -- standard
+
           args <- getArgs
-          let inp  = (read (args !! 0)) :: Integer
+          let step  = (read (args !! 0)) :: Integer
           exsts1    <- doesFileExist "collatzMap.dat"
           exsts2    <- doesFileExist "collatzMap.prog"
-          let exsts  = exsts1 && exsts2
-          
-          if exsts then return ()
+          let exsts  = exsts1 && exsts2          
+          if exsts then return () -- we assume these files exists. If they don't, we have to create them now
                    else do encodeFile "collatzMap.prog" (1                          :: Integer)
                            encodeFile "collatzMap.dat"  ((DM.fromList [(1, True)])  :: TermMap)
 
-          savedMap <- decodeFile "collatzMap.dat"  :: IO TermMap
+          savedMap <- decodeFile "collatzMap.dat"  :: IO TermMap -- read progress from disk
           prevsize <- decodeFile "collatzMap.prog" :: IO Integer
 
           terminateMap <- atomically $ newTVar savedMap
+          let newSize = prevsize + step
 
-          putStrLn "Now spawning..."
-
-          mapM_ forkIO [dynCollatz terminateMap n | n <- [prevsize .. inp]] -- (should be prevsize + inp)
+          mapM_ forkIO [dynCollatz terminateMap n | n <- [prevsize .. newSize]]
 
           removeFile "collatzMap.dat"  -- old files no longer needed!
           removeFile "collatzMap.prog"   
 
-          putStrLn "Now waiting..."
-          waitForChildren
+          waitForChildren -- Wait for all children to terminate
 
           newMap <- readTVarIO terminateMap
           
-          encodeFile "collatzMap.prog" inp
+          encodeFile "collatzMap.prog" newSize
           encodeFile "collatzMap.dat"  newMap
-          putStrLn "All done!"
+
+          putStrLn $ "Finished calculating up to " ++  show newSize ++ " :)"
