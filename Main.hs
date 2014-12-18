@@ -22,7 +22,7 @@ type TermMap = DM.Map Integer Bool
 {-- Concurrency foo. Don't blame me for unsafePerformIO, docs for Control.Concurrent told me to do it! --}
 
 children :: MVar [MVar ()]
-children = unsafePerformIO (newMVar [])
+children = unsafePerformIO $ newMVar []
 
 waitForChildren :: IO ()
 waitForChildren = do
@@ -39,11 +39,16 @@ forkChild io = do mvar   <- newEmptyMVar
                   putMVar children (mvar:childs)
                   forkFinally io (\_ -> putMVar mvar ())
 
-dynCollatz :: TVar TermMap -> Integer -> IO ()
-dynCollatz tm n0 = do accum <- readTVarIO tm
-                      let (is, terminates) = coll (next n0) n0 accum 
-                      if terminates then atomically $ writeTVar tm $ recInsert is terminates accum
-                                    else putStrLn   $ "Loop @ " ++ show n0
+{-- Collatz Foo --}
+
+results :: TVar TermMap
+results = unsafePerformIO $ newTVarIO (undefined)
+
+dynCollatz :: Integer -> IO ()
+dynCollatz n0 = do accum <- readTVarIO results
+                   let (is, terminates) = coll (next n0) n0 accum 
+                   if terminates then atomically $ writeTVar results $ recInsert is terminates accum
+                                 else putStrLn   $ "Loop @ " ++ show n0
   where
     coll :: Integer -> Integer -> TermMap -> ([Integer], Bool)
     coll n i tmap = if n == i then ([n], False) else case DM.lookup n tmap of
@@ -72,17 +77,17 @@ main = do hSetBuffering stdout NoBuffering -- standard
           savedMap <- decodeFile "collatzMap.dat"  :: IO TermMap -- read progress from disk
           prevsize <- decodeFile "collatzMap.prog" :: IO Integer
 
-          terminateMap <- atomically $ newTVar savedMap
+          atomically $ writeTVar results savedMap
           let newSize = prevsize + step
 
-          mapM_ forkIO [dynCollatz terminateMap n | n <- [prevsize .. newSize]]
+          mapM_ forkIO [dynCollatz n | n <- [prevsize .. newSize]]
 
           removeFile "collatzMap.dat"  -- old files no longer needed!
           removeFile "collatzMap.prog"   
 
           waitForChildren -- Wait for all children to terminate
 
-          newMap <- readTVarIO terminateMap
+          newMap <- readTVarIO results
           
           encodeFile "collatzMap.prog" newSize
           encodeFile "collatzMap.dat"  newMap
