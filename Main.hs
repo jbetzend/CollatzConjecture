@@ -41,17 +41,16 @@ forkChild io = do mvar   <- newEmptyMVar
 
 dynCollatz :: TVar TermMap -> Integer -> IO ()
 dynCollatz tm n0 = do accum <- readTVarIO tm
-                      b <- coll n0 [] tm accum 
-                      if b then return () else putStrLn $ "Loop: " ++ show n0
+                      let (is, terminates) = coll (next n0) n0 accum 
+                      if terminates then atomically $ writeTVar tm $ recInsert is terminates accum
+                                    else putStrLn   $ "Loop @ " ++ show n0
   where
-    coll :: Integer -> [Integer] -> TVar TermMap -> TermMap -> IO Bool
-    coll n is tvar tmap = case DM.lookup n tmap of
-         (Just b) -> (atomically $ writeTVar tvar $ recInsert is b tmap) >> return b
-         Nothing  -> if n `elem` is
-           then putStrLn ("Loop detected! Element: " ++ show n) >> return False -- TODO: improve & sendmail
-           else case even n of
-                False -> coll ((3*n+1) `div` 2) (n:is) tvar tmap
-                True  -> coll (n `div` 2)       (n:is) tvar tmap
+    coll :: Integer -> Integer -> TermMap -> ([Integer], Bool)
+    coll n i tmap = if n == i then ([n], False) else case DM.lookup n tmap of
+      (Just b) -> ([n], b) ; Nothing -> let (is, c) = coll (next n) i tmap in (n:is, c)
+
+    next :: Integer -> Integer
+    next n = case even n of False -> 3*n + 1 ; True -> n `div` 2
 
     recInsert :: [Integer] -> Bool -> TermMap -> TermMap
     recInsert is b m = DL.foldr (\n -> DM.insert n b) m is
