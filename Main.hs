@@ -69,7 +69,7 @@ main = do hSetBuffering stdout NoBuffering -- standard
           exsts2    <- doesFileExist "collatzMap.prog"
           let exsts  = exsts1 && exsts2          
           if exsts then return () -- we assume these files exists. If they don't, we have to create them now
-                   else do encodeFile "collatzMap.prog" (1                         ::     Integer)
+                   else do encodeFile "collatzMap.prog" (1                 ::     Integer)
                            encodeFile "collatzMap.dat"  ((DS.fromList [1]) :: Set Integer)
 
           savedSet <- decodeFile "collatzMap.dat"  :: IO (Set Integer)     -- read progress from disk
@@ -85,9 +85,9 @@ main = do hSetBuffering stdout NoBuffering -- standard
 
           waitForChildren -- Wait for all children to terminate
 
-          newMap <- readTVarIO results
+          newSet <- readTVarIO results
           
           encodeFile "collatzMap.prog" newSize
-          encodeFile "collatzMap.dat"  newMap
+          encodeFile "collatzMap.dat"  newSet
 
           putStrLn $ "Finished calculating up to " ++  show newSize ++ " :)"
