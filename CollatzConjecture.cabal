@@ -70,6 +70,8 @@ executable CollatzConjecture
                        stm >=2.4 && <2.5,
                        binary >=0.5 && <0.6,
                        containers >=0.5 && <0.6,
+                       unordered-containers >= 0.2.5,
+                       hashable >= 1.2.3,
                        bytestring ==0.10.0.2
   
   -- Directories containing source files.
