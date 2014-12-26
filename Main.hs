@@ -67,8 +67,8 @@ dynCollatz n0 = do results_tvar <- atomically $ readTMVar results
                    let (is, terminates) = coll n0 n0 False results_tvar
                    if not terminates then putStrLn $ "Loop starting at " ++ show n0
                                      else atomically $ do nuVar <- takeTMVar results
-                                                          let unified = unify (fst nuVar, recInsert is (snd nuVar))
-                                                          putTMVar results unified
+                                                          let nuRes = (fst nuVar, recInsert is (snd nuVar))
+                                                          putTMVar results nuRes
   where
     coll :: Integer -> Integer -> Bool -> Results -> ([Integer], Bool)
     coll n i visited res@(lim, set)
