@@ -52,8 +52,7 @@ executable CollatzConjecture
           -O3
           -threaded
           -rtsopts
-          -with-rtsopts=-N4
-
+ 
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
   

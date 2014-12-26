@@ -23,9 +23,14 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 type Results = (Integer, HashSet Integer)
 
 unify :: Results -> Results
-unify res@(n0, hs)
-  | (HS.member (n0 + 1) hs) = unify (n0 + 1, HS.delete (n0 + 1) hs)
-  | otherwise               = res
+unify res@(n0, hs) = foo n0 ((DL.sort . HS.toList) hs)
+  where
+    foo :: Integer -> [Integer] -> Results
+    foo n []          = (n, HS.empty)
+    foo n (x:xs)
+      | (     n >= x) = foo n xs
+      | (succ n == x) = foo x xs
+      | otherwise     = (n, HS.fromList (x:xs))
 
 instance (Eq t, Hashable t, Binary t) => Binary (HashSet t) where
   put = (put . HS.toList)
@@ -54,14 +59,16 @@ forkChild io = do mvar   <- newEmptyMVar
 
 {-- Collatz Foo --}
 
-results :: TVar Results
-results = unsafePerformIO $ newTVarIO (undefined)
+results :: TMVar Results
+results = unsafePerformIO newEmptyTMVarIO
 
 dynCollatz :: Integer -> IO ()
-dynCollatz n0 = do results_tvar <- readTVarIO results
-                   let (is, terminates) = coll n0 n0 False results_tvar 
-                   if terminates then atomically $ writeTVar results $ (fst results_tvar, recInsert is (snd results_tvar))
-                                 else putStrLn   $ "Loop @ " ++ show n0
+dynCollatz n0 = do results_tvar <- atomically $ readTMVar results
+                   let (is, terminates) = coll n0 n0 False results_tvar
+                   if not terminates then putStrLn $ "Loop starting at " ++ show n0
+                                     else atomically $ do nuVar <- takeTMVar results
+                                                          let unified = unify (fst nuVar, recInsert is (snd nuVar))
+                                                          putTMVar results unified
   where
     coll :: Integer -> Integer -> Bool -> Results -> ([Integer], Bool)
     coll n i visited res@(lim, set)
@@ -90,20 +97,20 @@ main = do hSetBuffering stdout NoBuffering -- standard
                    else encodeFile "collatzMap.dat" ((1, (HS.fromList [1])) :: Results)
 
           savedResults <- decodeFile "collatzMap.dat"  :: IO Results     -- read progress from disk
-          atomically $ writeTVar results savedResults
+          atomically $ putTMVar results savedResults
           
           let prevSize = fst savedResults
           let newSize  = prevSize + step
 
-          mapM_ (forkIO . dynCollatz) [prevSize .. newSize]
+          let allNewValues = [prevSize + 1 .. newSize]
+          mapM_ (forkChild . dynCollatz) allNewValues
 
-          removeFile "collatzMap.dat"  -- old files no longer needed!
           waitForChildren -- Wait for all children to terminate
 
-          newSet <- readTVarIO results
+          newSet <- atomically $ takeTMVar results
           let final = unify newSet
+          
+          removeFile "collatzMap.dat"  -- old files no longer needed!
           encodeFile "collatzMap.dat" final
 
-          print final
-          
-          putStrLn $ "Finished calculating up to " ++ show newSize ++ " :)"
+          putStrLn $ "Finished calculating up to " ++ (show . fst) final ++ " :)"
